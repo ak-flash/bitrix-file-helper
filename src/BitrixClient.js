@@ -1023,13 +1023,11 @@ export class BitrixClient {
     fields.push({ name: 'DETAIL_TEXT_TYPE', value: 'html' });
     fields.push({ name: 'PREVIEW_TEXT_TYPE', value: 'text' });
 
-    // Actual file — use transliterated ASCII name in Content-Disposition header
-    // (Bitrix ignores this and uses PROP[74][n0][name] field instead)
-    const asciiFilename = this.transliterate(nameBase).replace(/[^a-zA-Z0-9._-]/g, '_');
+    // Send actual file with original filename (UTF-8) in Content-Disposition
     const files = [
       {
         name: 'PROP[74][n0]',
-        filename: asciiFilename || 'file',
+        filename: nameBase,
         contentType: mimetype,
         data: bufferData
       },
@@ -1037,7 +1035,7 @@ export class BitrixClient {
       { name: 'bxu_files[]', filename: '', contentType: 'application/octet-stream', data: Buffer.alloc(0) }
     ];
 
-    console.log(`Sending file directly: NAME="${nameWithoutExt}", PROP[74][n0][name]="${nameBase}", ascii="${asciiFilename}"`);
+    console.log(`Sending file: NAME="${nameWithoutExt}", PROP[74][n0][name]="${nameBase}"`);
 
     // Build multipart body with UTF-8 encoding
     const boundary = `----WebKitFormBoundary${Date.now().toString(16)}`;
