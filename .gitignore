@@ -1,0 +1,7 @@
+.idea/
+node_modules/
+upload_responce.txt
+debug_response.html
+.env
+config.json
+package-lock.json
