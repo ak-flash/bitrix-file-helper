@@ -73,7 +73,8 @@ function createClient(ignoreSSL) {
         adminPath: config.adminPath,
         maxRetries: config.maxRetries,
         timeout: config.timeout,
-        rejectUnauthorized: !effectiveIgnore
+        rejectUnauthorized: !effectiveIgnore,
+        iblockId: config.iblockId
     });
 }
 
@@ -159,11 +160,6 @@ app.post('/files/upload', authMiddleware, upload.single('file'), async (req, res
         return;
     }
 
-    console.log('Upload request received:');
-    console.log('Original filename:', req.file.originalname);
-    console.log('Decoded filename:', req.file.originalname);
-    console.log('Mimetype:', req.file.mimetype);
-    console.log('Size:', req.file.size);
 
     const body = req.body || {};
     const sectionId = body.sectionId || config.sectionId || null;
@@ -184,7 +180,17 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
     console.log(`Bitrix helper API listening on port ${port}`);
+});
+
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error(`\n❌ Port ${port} is already in use.`);
+        console.error(`   Stop the existing process or set a different PORT env variable.\n`);
+        process.exit(1);
+    } else {
+        throw err;
+    }
 });
 
