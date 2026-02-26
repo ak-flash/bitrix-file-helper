@@ -1,0 +1,1086 @@
+<!doctype html>
+<html lang="ru">
+
+<head>
+  <meta charset="utf-8">
+  <title>Bitrix Helper</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+
+<body class="min-h-screen bg-gray-100 text-gray-900 p-4">
+  <div class="max-w-4xl mx-auto" x-data="bitrixHelperApp()">
+    <h1 class="text-2xl font-semibold mb-4">Bitrix Helper</h1>
+
+    <div class="bg-white rounded-lg p-4 mb-4 shadow">
+      <h2 class="text-lg font-semibold mb-3">Авторизация</h2>
+      <div class="flex flex-wrap gap-4">
+        <div class="flex-1 min-w-[260px]">
+          <label class="block text-sm mb-2">
+            Логин
+            <input id="username" type="text" autocomplete="username" x-model="username"
+              class="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          </label>
+        </div>
+        <div class="flex-1 min-w-[260px]">
+          <label class="block text-sm mb-2">
+            Пароль
+            <input id="password" type="password" autocomplete="current-password" x-model="password"
+              class="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          </label>
+        </div>
+        <div class="flex-1 min-w-[260px]">
+          <label class="block text-sm mb-2">
+            Section ID
+            <span
+              class="relative inline-flex items-center justify-center ml-1 w-4 h-4 rounded-full bg-gray-200 text-gray-700 text-[11px] cursor-pointer"
+              aria-label="Как получить SectionID" x-data="{ open: false }" @mouseenter="open = true"
+              @mouseleave="open = false" @focusin="open = true" @focusout="open = false" @click="open = !open">?
+              <span
+                class="absolute top-5 left-1/2 -translate-x-1/2 mt-1 px-2 py-1 rounded bg-gray-900 text-gray-50 text-xs max-w-xs shadow-lg whitespace-normal z-10"
+                x-show="open" x-transition>
+                Откройте в браузере в файловом менеджере нужную папку.<br>
+                В адресной строке найти параметр <b>SECTION_ID</b><br>
+                Пример:
+                https://www.volgmed.ru/bitrix/admin/iblock_list_admin.php?...&SECTION_ID=<b>5710</b>&apply_filter=Y
+              </span>
+            </span>
+            <input id="sectionId" type="number" x-model="sectionId"
+              class="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          </label>
+        </div>
+      </div>
+      <div class="mt-3 flex items-center gap-3">
+        <button id="loginBtn" @click="login" :disabled="isLoggingIn"
+          class="inline-flex items-center px-3 py-2 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed">
+          Войти
+        </button>
+        <span id="authBadge"
+          :class="isAuthorized ? 'inline-flex items-center rounded-lg px-2 py-1 text-xs bg-green-100 text-green-700' : 'inline-flex items-center rounded-full px-2 py-1 text-xs bg-red-100 text-red-700'"
+          x-text="isAuthorized ? 'авторизован' : 'не авторизован'"></span>
+        <div class="flex items-center gap-2 text-xs text-gray-700">
+          <input id="rememberToken" type="checkbox" x-model="rememberToken"
+            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-2">
+          <label for="rememberToken" class="cursor-pointer select-none">
+            Запомнить токен на этом устройстве (24 часа)
+          </label>
+        </div>
+      </div>
+
+      <div id="authStatus" class="mt-2 text-xs min-h-[18px]"
+        :class="authStatusType === 'error' ? 'text-red-700' : (authStatusType === 'ok' ? 'text-green-700' : '')"
+        x-text="authStatus"></div>
+    </div>
+
+    <div class="bg-white rounded-lg p-4 mb-4 shadow">
+      <h2 class="text-lg font-semibold mb-3">Файлы</h2>
+
+      <div class="mb-2 flex flex-wrap gap-2">
+        <button id="refreshFilesBtn" @click="loadFiles" :disabled="!isAuthorized || isLoadingFiles"
+          class="inline-flex items-center px-3 py-2 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed">
+          Обновить список
+        </button>
+        <button type="button" @click="openTreeModal" :disabled="isTreeModalOpen && isLoadingTree"
+          class="inline-flex items-center px-3 py-2 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed">
+          Дерево файлов
+        </button>
+      </div>
+
+      <div class="py-2 text-sm text-gray-600" x-show="breadcrumbs.length > 0">
+        <template x-for="(crumb, index) in breadcrumbs" :key="index">
+          <span>
+            <template x-if="index < breadcrumbs.length - 1">
+              <button type="button" class="text-blue-600 hover:underline" @click="goToCrumb(index)"
+                x-text="crumb.name"></button>
+            </template>
+            <template x-if="index === breadcrumbs.length - 1">
+              <span x-text="crumb.name"></span>
+            </template>
+            <span x-show="index < breadcrumbs.length - 1"> / </span>
+          </span>
+        </template>
+      </div>
+
+      <template x-if="isLoadingFiles">
+        <div class="mt-4 flex items-center text-xs text-gray-600">
+          <svg class="animate-spin h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none"
+            viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+          </svg>
+          <span class="ml-2">Загружаю список...</span>
+        </div>
+      </template>
+      <template x-if="!isLoadingFiles && filesStatusType === 'error' && filesStatus">
+        <div class="mt-2 text-xs text-red-700" x-text="filesStatus"></div>
+      </template>
+      <div id="filesContainer">
+        <template x-if="!isLoadingFiles && files.length === 0">
+          <div class="mt-2 text-xs text-gray-500">Файлы не найдены</div>
+        </template>
+        <template x-if="!isLoadingFiles && (files.length > 0 || (sectionHistory && sectionHistory.length > 0))">
+          <table class="w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                <th class="border border-gray-200 bg-gray-100 px-2 py-1 text-left">Имя</th>
+                <th class="border border-gray-200 bg-gray-100 px-2 py-1 text-left">Дата</th>
+                <th class="border border-gray-200 bg-gray-100 px-2 py-1 text-left">Тип</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-if="sectionHistory && sectionHistory.length > 0">
+                <tr class="cursor-pointer hover:bg-gray-50">
+                  <td class="border border-gray-200 px-2 py-1">
+                    <button type="button" class="text-left text-blue-600 hover:underline font-medium" @click="goUp">
+                      ..
+                    </button>
+                  </td>
+                  <td class="border border-gray-200 px-2 py-1"></td>
+                  <td class="border border-gray-200 px-2 py-1"></td>
+                </tr>
+              </template>
+              <template x-for="item in files" :key="item.id || item.name">
+                <tr>
+                  <td class="border border-gray-200 px-2 py-1">
+                    <template x-if="item.type === 'section' && item.id">
+                      <button type="button" class="text-left text-blue-600 hover:underline font-medium"
+                        @click="openSection(item.id, item.name)" x-text="item.name"></button>
+                    </template>
+                    <template x-if="!(item.type === 'section' && item.id)">
+                      <span x-text="item.name"></span>
+                    </template>
+                  </td>
+                  <td class="border border-gray-200 px-2 py-1" x-text="item.date || ''"></td>
+                  <td class="border border-gray-200 px-2 py-1" x-text="item.type === 'section' ? 'каталог' : 'файл'">
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </template>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-lg p-4 mb-4 shadow">
+      <h2 class="text-lg font-semibold mb-3">Загрузка файла</h2>
+      <div class="flex flex-wrap gap-4">
+        <div class="flex-1 min-w-[260px]">
+          <label class="block text-sm mb-2">
+            Файл
+            <input id="fileInput" type="file" x-ref="fileInput"
+              class="mt-1 block w-full text-sm text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+          </label>
+        </div>
+        <div class="flex-1 min-w-[260px]">
+          <label class="block text-sm mb-2">
+            Папка для загрузки
+            <select id="uploadSectionSelect" x-model="uploadSectionId" @focus="ensureUploadSectionsLoaded"
+              @click="ensureUploadSectionsLoaded"
+              class="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              <template x-for="opt in uploadSectionOptions" :key="opt.id">
+                <option :value="opt.id" x-text="opt.label"></option>
+              </template>
+            </select>
+          </label>
+          <label class="block text-xs mt-2">
+            Или Section ID вручную
+            <input id="uploadSectionId" type="number" x-model="uploadSectionId"
+              class="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          </label>
+        </div>
+        <div class="flex-1">
+          <label class="block text-sm mb-2">
+            Дата
+            <input id="uploadDate" type="date" x-model="uploadDate"
+              class="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          </label>
+        </div>
+      </div>
+      <div class="mt-3">
+        <button id="uploadBtn" @click="upload" :disabled="!isAuthorized || isUploading"
+          class="inline-flex items-center px-3 py-2 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed">
+          Загрузить
+        </button>
+      </div>
+      <div id="uploadStatus" class="mt-2 text-xs min-h-[18px]"
+        :class="uploadStatusType === 'error' ? 'text-red-700' : (uploadStatusType === 'ok' ? 'text-green-700' : '')"
+        x-text="uploadStatus"></div>
+    </div>
+
+    <template x-if="isTreeModalOpen">
+      <div class="fixed inset-0 bg-black/40 flex items-start justify-center p-4 sm:p-12 z-50"
+        @keydown.escape.window="closeTreeModal">
+        <div class="bg-white rounded-lg max-w-4xl w-full max-h-[80vh] flex flex-col shadow-xl"
+          @click.outside="closeTreeModal">
+          <div class="flex items-center justify-between px-4 py-2 border-b border-gray-200">
+            <h3 class="text-sm font-semibold">Дерево файлов</h3>
+            <button type="button" @click="closeTreeModal"
+              class="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-gray-200 text-gray-800 hover:bg-gray-300">
+              Закрыть
+            </button>
+          </div>
+          <div class="px-4 py-2 overflow-auto">
+            <div class="mt-1 text-xs min-h-[18px]"
+              :class="treeStatusType === 'error' ? 'text-red-700' : (treeStatusType === 'ok' ? 'text-green-700' : '')"
+              x-text="treeStatus"></div>
+            <template x-if="isLoadingTree">
+              <div class="mt-2 text-xs space-y-2">
+                <div class="w-full bg-gray-200 rounded h-1.5 overflow-hidden">
+                  <div class="bg-blue-600 h-1.5 transition-all duration-300" :style="`width: ${treeProgress}%`"></div>
+                </div>
+                <template x-if="!treeRows.length && files.length">
+                  <div class="text-[11px] text-gray-600">
+                    Уже отображаю содержимое текущей папки, дерево дочерних разделов достраивается...
+                  </div>
+                </template>
+              </div>
+            </template>
+            <template x-if="treeRows.length > 0">
+              <table class="w-full border-collapse text-xs mt-2">
+                <thead>
+                  <tr>
+                    <th class="border border-gray-200 bg-gray-100 px-2 py-1 text-left">Имя</th>
+                    <th class="border border-gray-200 bg-gray-100 px-2 py-1 text-left">Размер</th>
+                    <th class="border border-gray-200 bg-gray-100 px-2 py-1 text-left">Дата</th>
+                    <th class="border border-gray-200 bg-gray-100 px-2 py-1 text-left">Тип</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="(row, index) in treeRows" :key="row.id || index">
+                    <tr>
+                      <td class="border border-gray-200 px-2 py-1 whitespace-nowrap font-mono">
+                        <span x-text="row.prefix + row.connector"></span>
+                        <span x-text="row.icon + ' ' + row.name"></span>
+                      </td>
+                      <td class="border border-gray-200 px-2 py-1" x-text="row.size || ''"></td>
+                      <td class="border border-gray-200 px-2 py-1" x-text="row.date || ''"></td>
+                      <td class="border border-gray-200 px-2 py-1">
+                        <span
+                          class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] bg-gray-200 text-gray-700"
+                          x-text="row.kind === 'section' ? 'папка' : 'файл'"></span>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </template>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'bitrixHelperSettings';
+    const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+    const MAX_TREE_DEPTH = 5;
+
+    function loadSettings() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') return parsed;
+        return {};
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function saveSettings(partial) {
+      const current = loadSettings();
+      const next = { ...current, ...partial };
+      Object.keys(next).forEach((key) => {
+        if (next[key] === undefined || next[key] === null || next[key] === '') {
+          delete next[key];
+        }
+      });
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch (e) {
+      }
+    }
+
+    function bitrixHelperApp() {
+      return {
+        token: null,
+        username: '',
+        password: '',
+        rememberToken: false,
+        sectionId: '',
+        currentSectionId: '',
+        uploadSectionId: '',
+        uploadDate: '',
+        authStatus: '',
+        authStatusType: '',
+        filesStatus: '',
+        filesStatusType: '',
+        uploadStatus: '',
+        uploadStatusType: '',
+        files: [],
+        isLoggingIn: false,
+        isLoadingFiles: false,
+        isUploading: false,
+        sectionHistory: [],
+        breadcrumbs: [],
+        isTreeModalOpen: false,
+        isLoadingTree: false,
+        treeStatus: '',
+        treeStatusType: '',
+        treeRows: [],
+        uploadSectionOptions: [],
+        lastTreeRootId: '',
+        lastTreeRootName: '',
+        justOpenedModal: false,  // Флаг для предотвращения преждевременного закрытия
+        treeProgress: 0,
+        treeProgressTimer: null,
+        treeRootSections: [],
+
+        get isAuthorized() {
+          return !!this.token;
+        },
+
+        normalizeId(value) {
+          if (value === undefined || value === null) return '';
+          return String(value).trim();
+        },
+
+        init() {
+          const initialSettings = loadSettings();
+          let restoredToken = false;
+          if (initialSettings.username) {
+            this.username = initialSettings.username;
+          }
+          if (initialSettings.sectionId) {
+            this.sectionId = String(initialSettings.sectionId);
+          }
+          if (initialSettings.uploadSectionId) {
+            this.uploadSectionId = String(initialSettings.uploadSectionId);
+          }
+          if (initialSettings.uploadDate) {
+            this.uploadDate = String(initialSettings.uploadDate);
+          }
+          if (typeof initialSettings.rememberToken === 'boolean') {
+            this.rememberToken = initialSettings.rememberToken;
+          }
+
+          if (initialSettings.token && initialSettings.tokenCreatedAt && this.rememberToken) {
+            const createdAt = Number(initialSettings.tokenCreatedAt);
+            const age = Date.now() - createdAt;
+            if (Number.isFinite(createdAt) && Number.isFinite(age) && age < TOKEN_TTL_MS) {
+              this.setAuth(initialSettings.token);
+              this.authStatus = 'Восстановлена авторизация по сохранённому токену';
+              this.authStatusType = 'ok';
+              restoredToken = true;
+            } else {
+              saveSettings({
+                token: undefined,
+                tokenCreatedAt: undefined
+              });
+            }
+          }
+
+          this.$watch('username', (value) => {
+            const v = value.trim();
+            saveSettings({ username: v || undefined });
+          });
+
+          this.$watch('sectionId', (value) => {
+            const v = (value === undefined || value === null) ? '' : String(value).trim();
+            saveSettings({ sectionId: v || undefined });
+          });
+
+          this.$watch('uploadSectionId', (value) => {
+            const v = (value === undefined || value === null) ? '' : String(value).trim();
+            saveSettings({ uploadSectionId: v || undefined });
+          });
+
+          this.$watch('uploadDate', (value) => {
+            const v = (value === undefined || value === null) ? '' : String(value).trim();
+            saveSettings({ uploadDate: v || undefined });
+          });
+
+          this.$watch('rememberToken', (value) => {
+            const enabled = !!value;
+            if (!enabled) {
+              saveSettings({
+                rememberToken: false,
+                token: undefined,
+                tokenCreatedAt: undefined
+              });
+            } else {
+              const tokenToSave = this.token || undefined;
+              saveSettings({
+                rememberToken: true,
+                token: tokenToSave,
+                tokenCreatedAt: tokenToSave ? Date.now() : undefined
+              });
+            }
+          });
+
+          // корневой раздел для навигации берем из инпута Section ID
+          this.currentSectionId = this.normalizeId(this.sectionId);
+          if (restoredToken) {
+            this.loadFiles();
+          } else {
+            this.setAuth(null);
+          }
+
+        },
+
+        setAuth(token) {
+          this.token = token;
+          if (!token) {
+            this.sectionHistory = [];
+            this.currentSectionId = this.normalizeId(this.sectionId);
+            this.breadcrumbs = [];
+          }
+        },
+
+        async apiRequest(path, options = {}) {
+          const headers = options.headers ? { ...options.headers } : {};
+          if (this.token) {
+            headers['Authorization'] = 'Bearer ' + this.token;
+          }
+          const response = await fetch(path, { ...options, headers });
+          return response;
+        },
+
+        async login() {
+          this.authStatus = '';
+          this.authStatusType = '';
+
+          const username = this.username.trim();
+          const password = this.password;
+
+          if (!username || !password) {
+            this.authStatus = 'Укажи логин и пароль';
+            this.authStatusType = 'error';
+            return;
+          }
+
+          this.isLoggingIn = true;
+          this.authStatus = 'Логин...';
+
+          try {
+            const res = await fetch('/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username, password })
+            });
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+              this.setAuth(null);
+              this.authStatus = data.error || ('Ошибка авторизации: ' + res.status);
+              this.authStatusType = 'error';
+              return;
+            }
+
+            const newToken = data.token || null;
+            this.setAuth(newToken);
+            const tokenToSave = this.rememberToken && newToken ? newToken : undefined;
+            const tokenCreatedAt = tokenToSave ? Date.now() : undefined;
+            saveSettings({
+              username,
+              sectionId: this.normalizeId(this.sectionId) || undefined,
+              uploadSectionId: this.normalizeId(this.uploadSectionId) || undefined,
+              rememberToken: this.rememberToken ? true : undefined,
+              token: tokenToSave,
+              tokenCreatedAt
+            });
+            this.authStatus = 'Ок, токен получен';
+            this.authStatusType = 'ok';
+
+            await this.loadFiles();
+          } catch (e) {
+            this.setAuth(null);
+            this.authStatus = 'Ошибка сети: ' + e.message;
+            this.authStatusType = 'error';
+          } finally {
+            this.isLoggingIn = false;
+          }
+        },
+
+        async loadFiles() {
+          this.filesStatus = '';
+          this.filesStatusType = '';
+          this.files = [];
+
+          if (!this.token) {
+            this.filesStatus = 'Нет токена';
+            this.filesStatusType = 'error';
+            return;
+          }
+
+          this.isLoadingFiles = true;
+
+          // если мы в корне (нет истории и крошек) – берем ID из инпута
+          if ((!this.sectionHistory || this.sectionHistory.length === 0) &&
+            (!this.breadcrumbs || this.breadcrumbs.length === 0)) {
+            this.currentSectionId = this.normalizeId(this.sectionId);
+          }
+
+          const sectionId = this.normalizeId(this.currentSectionId);
+          const qs = sectionId ? ('?sectionId=' + encodeURIComponent(sectionId)) : '';
+
+          try {
+            const res = await this.apiRequest('/files' + qs);
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+              if (res.status === 401) {
+                this.setAuth(null);
+                saveSettings({
+                  token: undefined,
+                  tokenCreatedAt: undefined
+                });
+                this.authStatus = 'Сессия истекла, войди снова';
+                this.authStatusType = 'error';
+              }
+              this.filesStatus = data.error || ('Ошибка получения файлов: ' + res.status);
+              this.filesStatusType = 'error';
+              return;
+            }
+
+            const items = Array.isArray(data.items) ? data.items : [];
+            this.files = items;
+            this.ensureUploadSectionsLoaded();
+          } catch (e) {
+            this.filesStatus = 'Ошибка сети: ' + e.message;
+            this.filesStatusType = 'error';
+          } finally {
+            this.isLoadingFiles = false;
+          }
+        },
+
+        openSection(id, name) {
+          if (!id) return;
+          const current = this.normalizeId(this.currentSectionId || this.sectionId);
+          if (!this.sectionHistory) {
+            this.sectionHistory = [];
+          }
+          if (!this.breadcrumbs) {
+            this.breadcrumbs = [];
+          }
+          if (this.breadcrumbs.length === 0) {
+            this.breadcrumbs.push({
+              id: current || '',
+              name: current ? ('ID ' + current) : 'Корень'
+            });
+          }
+          this.sectionHistory.push(current);
+          this.currentSectionId = String(id);
+          this.breadcrumbs.push({
+            id: String(id),
+            name: name || ('ID ' + id)
+          });
+          this.loadFiles();
+        },
+
+        goUp() {
+          if (!this.sectionHistory || this.sectionHistory.length === 0) {
+            this.currentSectionId = this.normalizeId(this.sectionId);
+            if (this.breadcrumbs && this.breadcrumbs.length > 0) {
+              this.breadcrumbs = this.breadcrumbs.slice(0, 1);
+            }
+          } else {
+            const prev = this.sectionHistory.pop();
+            this.currentSectionId = prev ? String(prev) : this.normalizeId(this.sectionId);
+            if (this.breadcrumbs && this.breadcrumbs.length > 0) {
+              this.breadcrumbs.pop();
+            }
+          }
+          this.loadFiles();
+        },
+
+        goToCrumb(index) {
+          if (!this.breadcrumbs || index < 0 || index >= this.breadcrumbs.length) return;
+          const target = this.breadcrumbs[index];
+          const targetId = this.normalizeId(target.id || this.sectionId);
+          this.currentSectionId = targetId;
+          if (index === 0) {
+            this.sectionHistory = [];
+          } else {
+            this.sectionHistory = this.breadcrumbs
+              .slice(0, index)
+              .map((c) => (c.id ? String(c.id) : this.normalizeId(this.sectionId)));
+          }
+          this.breadcrumbs = this.breadcrumbs.slice(0, index + 1);
+          this.loadFiles();
+        },
+
+        async upload() {
+          this.uploadStatus = '';
+          this.uploadStatusType = '';
+
+          if (!this.token) {
+            this.uploadStatus = 'Нет токена';
+            this.uploadStatusType = 'error';
+            return;
+          }
+
+          const fileInput = this.$refs.fileInput;
+          const file = fileInput && fileInput.files && fileInput.files[0];
+
+          if (!file) {
+            this.uploadStatus = 'Выбери файл';
+            this.uploadStatusType = 'error';
+            return;
+          }
+
+          const sectionId = this.normalizeId(this.uploadSectionId);
+
+          const form = new FormData();
+          form.append('file', file);
+          if (sectionId) {
+            form.append('sectionId', sectionId);
+          }
+          if (this.uploadDate) {
+            form.append('uploadDate', this.uploadDate);
+          }
+
+          this.isUploading = true;
+          this.uploadStatus = 'Загрузка...';
+
+          try {
+            const res = await this.apiRequest('/files/upload', {
+              method: 'POST',
+              body: form
+            });
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+              if (res.status === 401) {
+                this.setAuth(null);
+                saveSettings({
+                  token: undefined,
+                  tokenCreatedAt: undefined
+                });
+                this.authStatus = 'Сессия истекла, войди снова';
+                this.authStatusType = 'error';
+              }
+              this.uploadStatus = data.error || ('Ошибка загрузки: ' + res.status);
+              this.uploadStatusType = 'error';
+              return;
+            }
+
+            this.uploadStatus = 'Файл отправлен, ответ backend: ' + JSON.stringify(data);
+            this.uploadStatusType = 'ok';
+          } catch (e) {
+            this.uploadStatus = 'Ошибка сети: ' + e.message;
+            this.uploadStatusType = 'error';
+          } finally {
+            this.isUploading = false;
+          }
+        },
+
+        openTreeModal() {
+          this.isTreeModalOpen = true;
+          this.justOpenedModal = true;
+
+          requestAnimationFrame(() => {
+            this.fetchTree().catch(error => {
+              this.treeStatus = 'Ошибка при построении дерева: ' + error.message;
+              this.treeStatusType = 'error';
+              this.isLoadingTree = false;
+            });
+
+            // Сбрасываем флаг через короткое время
+            setTimeout(() => {
+              this.justOpenedModal = false;
+            }, 100);
+          });
+        },
+
+        closeTreeModal() {
+          if (this.justOpenedModal) {
+            return;
+          }
+          this.isTreeModalOpen = false;
+        },
+
+        buildTreeRows(tree) {
+          if (!tree || !tree.sections) {
+            return [];
+          }
+
+          const rows = [];
+          const rootId = tree.root !== undefined && tree.root !== null ? tree.root : 0;
+
+          const visitSection = (sectionId, prefix) => {
+            const key = String(sectionId || '0');
+            const section = tree.sections[key];
+            if (!section) {
+              return;
+            }
+
+            const subsections = Array.isArray(section.sections) ? section.sections : [];
+            const elements = Array.isArray(section.elements) ? section.elements : [];
+
+            for (let i = 0; i < subsections.length; i++) {
+              const sub = subsections[i];
+              const isLast = i === subsections.length - 1 && elements.length === 0;
+              const connector = isLast ? '└── ' : '├── ';
+              const childPrefix = prefix + (isLast ? '    ' : '│   ');
+
+              rows.push({
+                kind: 'section',
+                id: sub.id,
+                name: sub.name,
+                prefix: prefix,
+                connector: connector,
+                size: '',
+                date: sub.date || '',
+                icon: '📁'
+              });
+
+              const subSection = tree.sections[String(sub.id)];
+              if (subSection) {
+                const subElements = Array.isArray(subSection.elements) ? subSection.elements : [];
+                const subSubsections = Array.isArray(subSection.sections) ? subSection.sections : [];
+
+                for (let j = 0; j < subElements.length; j++) {
+                  const elem = subElements[j];
+                  const isLastElem = j === subElements.length - 1 && subSubsections.length === 0;
+                  const elemConnector = isLastElem ? '└── ' : '├── ';
+                  rows.push({
+                    kind: 'element',
+                    id: elem.id,
+                    name: elem.name,
+                    prefix: childPrefix,
+                    connector: elemConnector,
+                    size: elem.size || '',
+                    date: elem.date || '',
+                    icon: '📄'
+                  });
+                }
+              }
+
+              visitSection(sub.id, childPrefix);
+            }
+
+            if (sectionId === rootId || sectionId === 0 || sectionId === '0') {
+              for (let j = 0; j < elements.length; j++) {
+                const elem = elements[j];
+                const isLastElem = j === elements.length - 1;
+                const elemConnector = isLastElem ? '└── ' : '├── ';
+                rows.push({
+                  kind: 'element',
+                  id: elem.id,
+                  name: elem.name,
+                  prefix: prefix,
+                  connector: elemConnector,
+                  size: elem.size || '',
+                  date: elem.date || '',
+                  icon: '📄'
+                });
+              }
+            }
+          };
+
+          visitSection(rootId, '');
+          return rows;
+        },
+
+        buildTreeRowsForSubtree(tree, basePrefix) {
+          if (!tree || !tree.sections) {
+            return [];
+          }
+
+          const rows = [];
+          const rootId = tree.root !== undefined && tree.root !== null ? tree.root : 0;
+
+          const visitSection = (sectionId, prefix) => {
+            const key = String(sectionId || '0');
+            const section = tree.sections[key];
+            if (!section) {
+              return;
+            }
+
+            const subsections = Array.isArray(section.sections) ? section.sections : [];
+            const elements = Array.isArray(section.elements) ? section.elements : [];
+
+            for (let i = 0; i < subsections.length; i++) {
+              const sub = subsections[i];
+              const isLast = i === subsections.length - 1 && elements.length === 0;
+              const connector = isLast ? '└── ' : '├── ';
+              const childPrefix = prefix + (isLast ? '    ' : '│   ');
+
+              rows.push({
+                kind: 'section',
+                id: sub.id,
+                name: sub.name,
+                prefix: prefix,
+                connector: connector,
+                size: '',
+                date: sub.date || '',
+                icon: '📁'
+              });
+
+              const subSection = tree.sections[String(sub.id)];
+              if (subSection) {
+                const subElements = Array.isArray(subSection.elements) ? subSection.elements : [];
+                const subSubsections = Array.isArray(subSection.sections) ? subSection.sections : [];
+
+                for (let j = 0; j < subElements.length; j++) {
+                  const elem = subElements[j];
+                  const isLastElem = j === subElements.length - 1 && subSubsections.length === 0;
+                  const elemConnector = isLastElem ? '└── ' : '├── ';
+                  rows.push({
+                    kind: 'element',
+                    id: elem.id,
+                    name: elem.name,
+                    prefix: childPrefix,
+                    connector: elemConnector,
+                    size: elem.size || '',
+                    date: elem.date || '',
+                    icon: '📄'
+                  });
+                }
+              }
+
+              visitSection(sub.id, childPrefix);
+            }
+
+            if (sectionId === rootId || sectionId === 0 || sectionId === '0') {
+              for (let j = 0; j < elements.length; j++) {
+                const elem = elements[j];
+                const isLastElem = j === elements.length - 1;
+                const elemConnector = isLastElem ? '└── ' : '├── ';
+                rows.push({
+                  kind: 'element',
+                  id: elem.id,
+                  name: elem.name,
+                  prefix: prefix,
+                  connector: elemConnector,
+                  size: elem.size || '',
+                  date: elem.date || '',
+                  icon: '📄'
+                });
+              }
+            }
+          };
+
+          visitSection(rootId, basePrefix || '');
+          return rows;
+        },
+
+        getChildPrefixForSection(sectionId) {
+          const index = this.treeRows.findIndex((row) => row && row.kind === 'section' && String(row.id) === String(sectionId));
+          if (index === -1) {
+            return '';
+          }
+          const row = this.treeRows[index];
+          const prefix = row.prefix || '';
+          const connector = row.connector || '';
+          return prefix + (connector === '└── ' ? '    ' : '│   ');
+        },
+
+        getSectionInsertIndex(sectionId) {
+          const index = this.treeRows.findIndex((row) => row && row.kind === 'section' && String(row.id) === String(sectionId));
+          if (index === -1) {
+            return -1;
+          }
+          return index + 1;
+        },
+
+        buildUploadSectionOptionsFromTreeRows(rows) {
+          const options = [];
+          const rootId = this.normalizeId(this.lastTreeRootId || this.sectionId);
+          if (rootId) {
+            const baseLabel = this.lastTreeRootName || ('ID ' + rootId);
+            options.push({
+              id: rootId,
+              label: baseLabel + ' (корень)'
+            });
+          }
+          if (Array.isArray(rows)) {
+            for (let i = 0; i < rows.length; i++) {
+              const row = rows[i];
+              if (row && row.kind === 'section' && row.id) {
+                options.push({
+                  id: String(row.id),
+                  label: (row.prefix || '') + (row.connector || '') + row.name
+                });
+              }
+            }
+          }
+          return options;
+        },
+
+        async ensureUploadSectionsLoaded() {
+          if (this.uploadSectionOptions && this.uploadSectionOptions.length > 0) {
+            return;
+          }
+          await this.fetchTree();
+        },
+
+        async loadTreeBySections(sections) {
+          if (!Array.isArray(sections) || sections.length === 0) {
+            return;
+          }
+
+          for (let i = 0; i < sections.length; i++) {
+            const section = sections[i];
+            const sectionId = section && section.id;
+            if (!sectionId) {
+              continue;
+            }
+
+            try {
+              const params = [];
+              params.push('rootSectionId=' + encodeURIComponent(sectionId));
+              params.push('maxDepth=' + encodeURIComponent(MAX_TREE_DEPTH));
+              const qs = params.length ? '?' + params.join('&') : '';
+
+              const res = await this.apiRequest('/files/tree' + qs);
+
+              let data;
+              try {
+                data = await res.json();
+              } catch (parseError) {
+                data = {};
+              }
+
+              if (!res.ok) {
+                continue;
+              }
+
+              const subtree = data.tree || data;
+              const insertIndex = this.getSectionInsertIndex(sectionId);
+              if (insertIndex === -1) {
+                continue;
+              }
+              const basePrefix = this.getChildPrefixForSection(sectionId);
+              const subtreeRows = this.buildTreeRowsForSubtree(subtree, basePrefix);
+              if (!Array.isArray(subtreeRows) || subtreeRows.length === 0) {
+                continue;
+              }
+
+              this.treeRows = [
+                ...this.treeRows.slice(0, insertIndex),
+                ...subtreeRows,
+                ...this.treeRows.slice(insertIndex)
+              ];
+              this.uploadSectionOptions = this.buildUploadSectionOptionsFromTreeRows(this.treeRows);
+            } catch (e) {
+            }
+          }
+        },
+
+        async fetchTree() {
+          this.treeStatus = '';
+          this.treeStatusType = '';
+          this.treeRows = [];
+
+          if (!this.token) {
+            this.treeStatus = 'Нет токена';
+            this.treeStatusType = 'error';
+            return;
+          }
+
+          this.isLoadingTree = true;
+          this.treeStatus = 'Строю дерево...';
+          this.treeProgress = 0;
+          if (this.treeProgressTimer) {
+            clearInterval(this.treeProgressTimer);
+          }
+          this.treeProgressTimer = setInterval(() => {
+            if (!this.isLoadingTree) {
+              clearInterval(this.treeProgressTimer);
+              this.treeProgressTimer = null;
+              return;
+            }
+            if (this.treeProgress < 90) {
+              this.treeProgress += 2;
+            }
+          }, 500);
+
+          const rootSectionId = this.normalizeId(this.sectionId);
+          const params = [];
+          if (rootSectionId) {
+            params.push('rootSectionId=' + encodeURIComponent(rootSectionId));
+          }
+          params.push('maxDepth=' + encodeURIComponent(1));
+          const qs = params.length ? '?' + params.join('&') : '';
+
+          try {
+            const res = await this.apiRequest('/files/tree' + qs);
+
+            let data;
+            try {
+              data = await res.json();
+            } catch (parseError) {
+              data = {};
+            }
+
+            if (!res.ok) {
+              if (res.status === 401) {
+                this.setAuth(null);
+                saveSettings({
+                  token: undefined,
+                  tokenCreatedAt: undefined
+                });
+                this.authStatus = 'Сессия истекла, войди снова';
+                this.authStatusType = 'error';
+              }
+              this.treeStatus = data.error || ('Ошибка построения дерева: ' + res.status);
+              this.treeStatusType = 'error';
+              return;
+            }
+
+            const tree = data.tree || data;
+
+            const rootId = tree.root !== undefined && tree.root !== null ? tree.root : 0;
+            const rootKey = String(rootId || '0');
+            const rootSection = tree.sections && tree.sections[rootKey];
+            this.lastTreeRootId = String(rootId || '');
+            this.lastTreeRootName = (rootSection && rootSection.name)
+              ? rootSection.name
+              : (rootId ? ('ID ' + rootId) : 'Корень');
+
+            this.treeRows = this.buildTreeRows(tree);
+            this.uploadSectionOptions = this.buildUploadSectionOptionsFromTreeRows(this.treeRows);
+
+            if (!rootSection || !Array.isArray(rootSection.sections) || rootSection.sections.length === 0) {
+              if (this.treeRows.length === 0) {
+                this.treeStatus = 'Дерево пустое';
+              } else {
+                this.treeStatus = 'Готово';
+              }
+              this.treeStatusType = 'ok';
+              return;
+            }
+
+            this.treeStatus = 'Строю дерево по папкам...';
+            this.treeStatusType = 'ok';
+
+            await this.loadTreeBySections(rootSection.sections);
+
+            if (this.treeRows.length === 0) {
+              this.treeStatus = 'Дерево пустое';
+            } else {
+              this.treeStatus = 'Готово';
+            }
+            this.treeStatusType = 'ok';
+          } catch (e) {
+            this.treeStatus = 'Ошибка сети: ' + e.message;
+            this.treeStatusType = 'error';
+          } finally {
+            this.isLoadingTree = false;
+            this.treeProgress = 100;
+            if (this.treeProgressTimer) {
+              clearInterval(this.treeProgressTimer);
+              this.treeProgressTimer = null;
+            }
+          }
+
+        }
+      };
+    }
+  </script>
+</body>
+
+</html>
