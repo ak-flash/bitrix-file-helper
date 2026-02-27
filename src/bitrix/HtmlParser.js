@@ -49,7 +49,12 @@ export class HtmlParser {
                             !name.toLowerCase().includes('название') &&
                             !name.toLowerCase().includes('name') &&
                             !name.includes('---') &&
-                            !name.includes('Элемент')) {
+                            !name.includes('Элемент') &&
+                            !name.toLowerCase().startsWith('добавить') &&
+                            !name.toLowerCase().includes('добавить элемент') &&
+                            !name.toLowerCase().includes('добавить папку') &&
+                            !name.toLowerCase().includes('добавить раздел') &&
+                            !name.toLowerCase().includes('добавить файл')) {
                             files.push({
                                 name: name.substring(0, 100),
                                 size,
@@ -123,7 +128,15 @@ export class HtmlParser {
             }
 
             if (!name || name.length < 2) return;
-            if (name.toLowerCase().includes('название') || name.toLowerCase().includes('name')) return;
+            const nameLower = name.toLowerCase();
+            if (nameLower.includes('название') ||
+                nameLower.includes('name') ||
+                nameLower.startsWith('добавить') ||
+                nameLower.includes('добавить элемент') ||
+                nameLower.includes('добавить папку') ||
+                nameLower.includes('добавить файл') ||
+                nameLower.includes('добавить раздел') ||
+                name.includes('Элемент')) return;
 
             const active = activeIdx >= 0 && cells[activeIdx]
                 ? $(cells[activeIdx]).find('.main-grid-cell-content').text().trim()

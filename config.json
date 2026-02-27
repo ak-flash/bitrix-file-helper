@@ -3,5 +3,6 @@
   "adminPath": "/bitrix/admin/index.php",
   "maxRetries": 3,
   "timeout": 30000,
-  "iblockId": 6
+  "iblockId": 6,
+  "debug": false
 }

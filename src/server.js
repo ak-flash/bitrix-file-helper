@@ -100,6 +100,13 @@ function authMiddleware(req, res, next) {
     next();
 }
 
+app.get('/config/public', (req, res) => {
+    res.json({
+        siteUrl: config.siteUrl || '',
+        iblockId: config.iblockId || 6
+    });
+});
+
 app.post('/auth/login', async (req, res) => {
     const { username, password, ignoreSSL } = req.body || {};
     if (!username || !password) {

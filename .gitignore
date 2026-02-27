@@ -1,6 +1,6 @@
 .idea/
 node_modules/
-temp/
+debug/
 upload_responce.txt
 debug_response.html
 .env

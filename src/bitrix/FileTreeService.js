@@ -1,4 +1,7 @@
 import { HtmlParser } from './HtmlParser.js';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const config = require('../../config.json');
 
 /**
  * FileTreeService — builds and exports the Bitrix iblock file tree
@@ -53,8 +56,11 @@ export class FileTreeService {
                 headers: { Referer: `${this.http.siteUrl}/bitrix/admin/` }
             });
 
-            const fs = await import('fs');
-            fs.writeFileSync('./debug_response.html', response.data);
+            if (config.debug) {
+                const fs = await import('fs');
+                fs.mkdirSync('./debug', { recursive: true });
+                fs.writeFileSync('./debug/debug_response.html', response.data);
+            }
 
             return HtmlParser.parseFileList(response.data);
         } catch (error) {
@@ -103,7 +109,12 @@ export class FileTreeService {
             itemCount: items.length
         };
 
+        const childSections = [];
         for (const item of items) {
+            // Skip Bitrix UI artifacts like "Добавить элемент", "Добавить раздел", etc.
+            if (item.name && item.name.toLowerCase().startsWith('добавить')) {
+                continue;
+            }
             if (item.type === 'section') {
                 tree.sections[sectionKey].sections.push({
                     id: item.id,
@@ -115,7 +126,7 @@ export class FileTreeService {
                     link: item.link
                 });
                 tree.totalSections++;
-                await this._traverseSection(item.id, tree, depth + 1, maxDepth);
+                childSections.push(item);
             } else {
                 tree.sections[sectionKey].elements.push({
                     id: item.id,
@@ -129,6 +140,11 @@ export class FileTreeService {
                 tree.totalElements++;
             }
         }
+
+        // Обходим дочерние разделы параллельно вместо последовательного await
+        await Promise.all(
+            childSections.map(item => this._traverseSection(item.id, tree, depth + 1, maxDepth))
+        );
     }
 
     /**
