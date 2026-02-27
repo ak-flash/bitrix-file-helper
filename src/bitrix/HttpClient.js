@@ -1,5 +1,6 @@
 import axios from 'axios';
 import https from 'https';
+import http from 'http';
 
 /**
  * HttpClient — manages the axios instance, cookies, and authenticated state
@@ -20,13 +21,23 @@ export class HttpClient {
         this.authenticated = false;
 
         const httpsAgent = new https.Agent({
-            rejectUnauthorized: this.rejectUnauthorized
+            rejectUnauthorized: this.rejectUnauthorized,
+            keepAlive: true,
+            maxSockets: 50,
+            keepAliveMsecs: 10000
+        });
+
+        const httpAgent = new http.Agent({
+            keepAlive: true,
+            maxSockets: 50,
+            keepAliveMsecs: 10000
         });
 
         this._axios = axios.create({
             baseURL: this.siteUrl,
             timeout: this.timeout,
             withCredentials: true,
+            httpAgent,
             httpsAgent,
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',

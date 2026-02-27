@@ -12,6 +12,7 @@ export class FileUploadService {
     constructor(httpClient, iblockId) {
         this.http = httpClient;
         this.iblockId = String(iblockId ?? 6);
+        this._formCache = new Map();
     }
 
     /**
@@ -136,98 +137,115 @@ export class FileUploadService {
         const editUrl = `/bitrix/admin/iblock_element_edit.php?${qs}`;
         const listUrl = this._getFileManagerListUrl(normalizedSectionId);
 
-        const editPageResponse = await this.http.get(editUrl, {
-            headers: { Referer: listUrl }
-        });
+        let actionUrl, prop74NameField, prop74TypeField, prop74SizeField, prop74ErrorField;
+        const fields = [];
+        let hasCodeField = false;
 
-        const $ = cheerio.load(editPageResponse.data);
+        if (this._formCache.has(effectiveSectionId)) {
+            const cached = this._formCache.get(effectiveSectionId);
+            actionUrl = cached.actionUrl;
+            prop74NameField = cached.prop74NameField;
+            prop74TypeField = cached.prop74TypeField;
+            prop74SizeField = cached.prop74SizeField;
+            prop74ErrorField = cached.prop74ErrorField;
+            hasCodeField = cached.hasCodeField;
 
-        let $form = $('form[name="form_element"]');
-        if ($form.length === 0) $form = $('form[id^="form_"]');
-        if ($form.length === 0) $form = $('form').first();
-        if ($form.length === 0) throw new Error('Нет прав на загрузку или редактирование в данной папке (Bitrix element edit form not found)');
+            for (const f of cached.fields) {
+                if (f.name.includes('PROP[68]') && f.name.includes('[VALUE]')) {
+                    fields.push({ name: f.name, value: prop68Value });
+                } else {
+                    fields.push({ name: f.name, value: f.value });
+                }
+            }
+        } else {
+            const editPageResponse = await this.http.get(editUrl, {
+                headers: { Referer: listUrl }
+            });
 
-        const actionAttr = $form.attr('action') || editUrl;
-        const actionUrl = actionAttr.startsWith('http') || actionAttr.startsWith('/')
-            ? actionAttr
-            : `/bitrix/admin/${actionAttr}`;
+            const $ = cheerio.load(editPageResponse.data);
+
+            let $form = $('form[name="form_element"]');
+            if ($form.length === 0) $form = $('form[id^="form_"]');
+            if ($form.length === 0) $form = $('form').first();
+            if ($form.length === 0) throw new Error('Нет прав на загрузку или редактирование в данной папке (Bitrix element edit form not found)');
+
+            const actionAttr = $form.attr('action') || editUrl;
+            actionUrl = actionAttr.startsWith('http') || actionAttr.startsWith('/')
+                ? actionAttr
+                : `/bitrix/admin/${actionAttr}`;
+
+            let hasSectionField = false;
+            let hasDateField = false;
+            const sectionFieldNames = ['IBLOCK_SECTION_ID', 'IBLOCK_SECTION_ID[]', 'SECTION_ID', 'IBLOCK_SECTION[]'];
+
+            $form.find('input[type="hidden"]').each((_, el) => {
+                const name = $(el).attr('name');
+                if (!name) return;
+
+                let value = $(el).attr('value') ?? '';
+
+                if (sectionFieldNames.includes(name)) {
+                    value = effectiveSectionId;
+                    hasSectionField = true;
+                }
+
+                if (name.includes('PROP[68]') && name.includes('[VALUE]')) {
+                    value = prop68Value;
+                    hasDateField = true;
+                }
+
+                if (name === 'CODE' && value && String(value).trim() !== '') {
+                    hasCodeField = true;
+                }
+
+                fields.push({ name, value });
+            });
+
+            if (!hasSectionField && effectiveSectionId) {
+                sectionFieldNames.forEach((name) => fields.push({ name, value: effectiveSectionId }));
+            }
+
+            if (!hasDateField && prop68Value) {
+                const prop68Inputs = $form.find('input[name^="PROP[68]"]');
+                if (prop68Inputs.length > 0) {
+                    prop68Inputs.each((_, el) => {
+                        const name = $(el).attr('name') || '';
+                        if (name.includes('[VALUE]')) fields.push({ name, value: prop68Value });
+                    });
+                } else {
+                    fields.push({ name: 'PROP[68][n0][VALUE]', value: prop68Value });
+                }
+            }
+
+            prop74NameField = 'PROP[74][n0][name]';
+            prop74TypeField = 'PROP[74][n0][type]';
+            prop74SizeField = 'PROP[74][n0][size]';
+            prop74ErrorField = 'PROP[74][n0][error]';
+
+            const prop74Inputs = $form.find('input[name^="PROP[74]"]');
+            if (prop74Inputs.length > 0) {
+                prop74Inputs.each((_, el) => {
+                    const name = $(el).attr('name') || '';
+                    if (name.includes('[name]')) prop74NameField = name;
+                    else if (name.includes('[type]')) prop74TypeField = name;
+                    else if (name.includes('[size]')) prop74SizeField = name;
+                    else if (name.includes('[error]')) prop74ErrorField = name;
+                });
+            }
+
+            this._formCache.set(effectiveSectionId, {
+                actionUrl,
+                prop74NameField,
+                prop74TypeField,
+                prop74SizeField,
+                prop74ErrorField,
+                hasCodeField,
+                fields: fields.map(f => ({ ...f }))
+            });
+        }
 
         const bufferData = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || '');
         const mimetype = extra?.mimetype || 'application/octet-stream';
-
-        const fields = [];
-        let hasSectionField = false;
-        let hasCodeField = false;
-        let hasDateField = false;
-        const sectionFieldNames = ['IBLOCK_SECTION_ID', 'IBLOCK_SECTION_ID[]', 'SECTION_ID', 'IBLOCK_SECTION[]'];
-
-        $form.find('input[type="hidden"]').each((_, el) => {
-            const name = $(el).attr('name');
-            if (!name) return;
-
-            let value = $(el).attr('value') ?? '';
-
-            if (sectionFieldNames.includes(name)) {
-                value = effectiveSectionId;
-                hasSectionField = true;
-            }
-
-            if (name.includes('PROP[68]') && name.includes('[VALUE]')) {
-                value = prop68Value;
-                hasDateField = true;
-            }
-
-            if (name === 'CODE' && value && String(value).trim() !== '') {
-                hasCodeField = true;
-            }
-
-            fields.push({ name, value });
-        });
-
-        if (!hasSectionField && effectiveSectionId) {
-            sectionFieldNames.forEach((name) => fields.push({ name, value: effectiveSectionId }));
-        }
-
-        if (!hasDateField && prop68Value) {
-            const prop68Inputs = $form.find('input[name^="PROP[68]"]');
-            if (prop68Inputs.length > 0) {
-                prop68Inputs.each((_, el) => {
-                    const name = $(el).attr('name') || '';
-                    if (name.includes('[VALUE]')) fields.push({ name, value: prop68Value });
-                });
-            } else {
-                fields.push({ name: 'PROP[68][n0][VALUE]', value: prop68Value });
-            }
-        }
-
-        if (!hasCodeField) {
-            const transliterated = transliterate(nameWithoutExt);
-            const slug = (transliterated || 'file')
-                .toLowerCase()
-                .replace(/[^a-z0-9]+/g, '-')
-                .replace(/^-+|-+$/g, '');
-            fields.push({ name: 'CODE', value: slug.slice(0, 50) });
-        }
-
-        fields.push({ name: 'ACTIVE', value: 'Y' });
-        fields.push({ name: 'NAME', value: nameWithoutExt });
-
-        // Find PROP[74] field names from the form
-        let prop74NameField = 'PROP[74][n0][name]';
-        let prop74TypeField = 'PROP[74][n0][type]';
-        let prop74SizeField = 'PROP[74][n0][size]';
-        let prop74ErrorField = 'PROP[74][n0][error]';
-
-        const prop74Inputs = $form.find('input[name^="PROP[74]"]');
-        if (prop74Inputs.length > 0) {
-            prop74Inputs.each((_, el) => {
-                const name = $(el).attr('name') || '';
-                if (name.includes('[name]')) prop74NameField = name;
-                else if (name.includes('[type]')) prop74TypeField = name;
-                else if (name.includes('[size]')) prop74SizeField = name;
-                else if (name.includes('[error]')) prop74ErrorField = name;
-            });
-        }
 
         fields.push({ name: prop74NameField, value: nameBase });
         fields.push({ name: prop74TypeField, value: mimetype });

@@ -61,6 +61,17 @@ const upload = multer({
 });
 const sessions = new Map();
 
+// Периодическая очистка старых сессий (неактивных более 24 часов)
+const SESSION_TTL = 24 * 60 * 60 * 1000; // 24 hours
+setInterval(() => {
+    const now = Date.now();
+    for (const [token, session] of sessions.entries()) {
+        if (now - session.createdAt > SESSION_TTL) {
+            sessions.delete(token);
+        }
+    }
+}, 60 * 60 * 1000); // Check every hour
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicDir = path.join(__dirname, '..', 'public');

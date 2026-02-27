@@ -11,7 +11,11 @@
 
 <body class="min-h-screen bg-gray-100 text-gray-900 p-4">
   <div class="max-w-4xl mx-auto" x-data="bitrixHelperApp()">
-    <h1 class="text-2xl font-semibold mb-4">Bitrix Helper</h1>
+    <div class="flex items-center justify-between mb-4">
+      <h1 class="text-2xl font-semibold">Bitrix Helper</h1>
+      <a :href="siteUrl" target="_blank" class="text-sm text-blue-600 hover:underline" x-show="siteUrl"
+        x-text="siteUrl"></a>
+    </div>
 
     <div class="bg-white rounded-lg p-4 mb-4 shadow">
       <h2 class="text-lg font-semibold mb-3">Авторизация</h2>
@@ -324,22 +328,24 @@
               </button>
             </div>
           </div>
-          <div class="px-4 py-2 overflow-auto">
-            <div class="mt-1 text-xs min-h-[18px]"
-              :class="treeStatusType === 'error' ? 'text-red-700' : (treeStatusType === 'ok' ? 'text-green-700' : '')"
-              x-text="treeStatus"></div>
-            <template x-if="isLoadingTree">
-              <div class="mt-2 text-xs space-y-2">
-                <div class="w-full bg-gray-200 rounded h-1.5 overflow-hidden">
-                  <div class="bg-blue-600 h-1.5 transition-all duration-300" :style="`width: ${treeProgress}%`"></div>
-                </div>
-                <template x-if="!treeRows.length && files.length">
-                  <div class="text-[11px] text-gray-600">
-                    Уже отображаю содержимое текущей папки, дерево дочерних разделов достраивается...
+          <div class="px-4 pb-2 overflow-auto relative">
+            <div class="sticky top-0 bg-white z-10 pt-2 pb-2 mb-2 border-b border-gray-100 shadow-sm">
+              <div class="mt-1 text-xs min-h-[18px]"
+                :class="treeStatusType === 'error' ? 'text-red-700' : (treeStatusType === 'ok' ? 'text-green-700' : '')"
+                x-text="treeStatus"></div>
+              <template x-if="isLoadingTree">
+                <div class="mt-2 text-xs space-y-2">
+                  <div class="w-full bg-gray-200 rounded h-1.5 overflow-hidden">
+                    <div class="bg-blue-600 h-1.5 transition-all duration-300" :style="`width: ${treeProgress}%`"></div>
                   </div>
-                </template>
-              </div>
-            </template>
+                  <template x-if="!treeRows.length && files.length">
+                    <div class="text-[11px] text-gray-600">
+                      Уже отображаю содержимое текущей папки, дерево дочерних разделов достраивается...
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </div>
             <template x-if="treeRows.length > 0">
               <table class="w-full border-collapse text-xs mt-2">
                 <thead>
@@ -1190,7 +1196,7 @@
 
         buildUploadSectionOptionsFromTreeRows(rows) {
           const options = [];
-          const rootId = this.normalizeId(this.lastTreeRootId || this.sectionId);
+          const rootId = this.normalizeId(this.lastTreeRootId || this.currentSectionId);
           if (rootId) {
             const baseLabel = this.lastTreeRootName || ('ID ' + rootId);
             options.push({
@@ -1324,7 +1330,7 @@
           this.totalTreeRequests = 0;
           this.completedTreeRequests = 0;
 
-          const rootSectionId = this.normalizeId(this.sectionId);
+          const rootSectionId = this.normalizeId(this.currentSectionId);
           const params = [];
           if (rootSectionId) {
             params.push('rootSectionId=' + encodeURIComponent(rootSectionId));
