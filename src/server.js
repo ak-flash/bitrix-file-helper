@@ -154,8 +154,8 @@ app.get('/files/tree', authMiddleware, async (req, res) => {
 app.get('/files', authMiddleware, async (req, res) => {
     const sectionId = req.query.sectionId || config.sectionId || null;
     try {
-        const files = await req.bitrix.getUserFiles(sectionId);
-        res.json({ items: files });
+        const result = await req.bitrix.getUserFiles(sectionId);
+        res.json({ items: result.items, sectionName: result.sectionName || null });
     } catch (error) {
         res.status(500).json({ error: error.message || 'Failed to get files' });
     }

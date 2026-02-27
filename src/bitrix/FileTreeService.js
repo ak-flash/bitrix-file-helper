@@ -62,10 +62,16 @@ export class FileTreeService {
                 fs.writeFileSync('./debug/debug_response.html', response.data);
             }
 
-            return HtmlParser.parseFileList(response.data);
+            let items = HtmlParser.parseFileList(response.data);
+            items = items.filter(item => {
+                const nameLower = (item.name || '').toLowerCase();
+                return !nameLower.includes('добавить') && !nameLower.includes('название') && !nameLower.includes('name');
+            });
+            const sectionName = HtmlParser.parseSectionName(response.data);
+            return { items, sectionName };
         } catch (error) {
             console.error('Error getting files:', error.message);
-            return [];
+            return { items: [], sectionName: null };
         }
     }
 
@@ -112,7 +118,7 @@ export class FileTreeService {
         const childSections = [];
         for (const item of items) {
             // Skip Bitrix UI artifacts like "Добавить элемент", "Добавить раздел", etc.
-            if (item.name && item.name.toLowerCase().startsWith('добавить')) {
+            if (item.name && item.name.toLowerCase().includes('добавить')) {
                 continue;
             }
             if (item.type === 'section') {

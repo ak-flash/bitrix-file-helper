@@ -74,14 +74,18 @@
     </div>
 
     <div class="bg-white rounded-lg p-4 mb-4 shadow">
-      <h2 class="text-lg font-semibold mb-3">Файлы</h2>
+      <div class="flex flex-col mb-4">
+        <h2 class="text-2xl font-bold text-gray-800" x-show="rootSectionName" x-text="rootSectionName">Основной каталог
+        </h2>
+        <h2 class="text-lg font-semibold" x-show="!rootSectionName">Файлы</h2>
+      </div>
 
       <div class="mb-2 flex flex-wrap gap-2">
         <button id="refreshFilesBtn" @click="loadFiles" :disabled="!isAuthorized || isLoadingFiles"
           class="inline-flex items-center px-3 py-2 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed">
           Обновить список
         </button>
-        <button type="button" @click="openTreeModal" :disabled="isTreeModalOpen && isLoadingTree"
+        <button type="button" @click="openTreeModal" :disabled="!isAuthorized || (isTreeModalOpen && isLoadingTree)"
           class="inline-flex items-center px-3 py-2 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed">
           Дерево файлов
         </button>
@@ -426,6 +430,7 @@
         rememberToken: false,
         sectionId: '',
         currentSectionId: '',
+        rootSectionName: '',
         uploadSectionId: '',
         uploadDate: '',
         authStatus: '',
@@ -687,6 +692,7 @@
 
             const items = Array.isArray(data.items) ? data.items : [];
             this.files = items;
+            this.rootSectionName = data.sectionName || '';
             this.populateUploadSectionsFromFiles(items, sectionId);
           } catch (e) {
             this.filesStatus = 'Ошибка сети: ' + e.message;
@@ -1222,6 +1228,17 @@
           }
           if (options.length > 0) {
             this.uploadSectionOptions = options;
+            this.syncUploadSectionId(options);
+          }
+        },
+
+        // Синхронизирует uploadSectionId с доступными options
+        syncUploadSectionId(options) {
+          if (!options || options.length === 0) return;
+          const currentId = this.normalizeId(this.uploadSectionId);
+          const exists = options.some(opt => String(opt.id) === currentId);
+          if (!exists) {
+            this.uploadSectionId = String(options[0].id);
           }
         },
 
@@ -1284,6 +1301,7 @@
                 this.treeProgress = Math.max(5, Math.floor((this.completedTreeRequests / this.totalTreeRequests) * 100));
 
                 this.uploadSectionOptions = this.buildUploadSectionOptionsFromTreeRows(this.treeRows);
+                this.syncUploadSectionId(this.uploadSectionOptions);
               }
             })
           );
@@ -1351,6 +1369,7 @@
 
             this.treeRows = this.buildTreeRows(tree);
             this.uploadSectionOptions = this.buildUploadSectionOptionsFromTreeRows(this.treeRows);
+            this.syncUploadSectionId(this.uploadSectionOptions);
 
             if (!rootSection || !Array.isArray(rootSection.sections) || rootSection.sections.length === 0) {
               if (this.treeRows.length === 0) {

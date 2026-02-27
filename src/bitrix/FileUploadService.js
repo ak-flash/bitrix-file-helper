@@ -145,7 +145,7 @@ export class FileUploadService {
         let $form = $('form[name="form_element"]');
         if ($form.length === 0) $form = $('form[id^="form_"]');
         if ($form.length === 0) $form = $('form').first();
-        if ($form.length === 0) throw new Error('Bitrix element edit form not found');
+        if ($form.length === 0) throw new Error('Нет прав на загрузку или редактирование в данной папке (Bitrix element edit form not found)');
 
         const actionAttr = $form.attr('action') || editUrl;
         const actionUrl = actionAttr.startsWith('http') || actionAttr.startsWith('/')
@@ -249,7 +249,7 @@ export class FileUploadService {
             { name: 'bxu_files[]', filename: '', contentType: 'application/octet-stream', data: Buffer.alloc(0) }
         ];
 
-        console.log(`[${new Date().toLocaleString('ru-RU')}] Sending file: NAME="${nameWithoutExt}", file="${nameBase}", sectionId=${effectiveSectionId}, date=${prop68Value || '(не указана)'}`);
+        console.log(`[${new Date().toLocaleString('ru-RU')}] Sending file: "${nameBase}", sectionId=${effectiveSectionId}, date=${prop68Value || '(не указана)'}`);
 
         const boundary = `----WebKitFormBoundary${Date.now().toString(16)}`;
         const body = buildMultipartBody(fields, files, boundary, 'utf-8');

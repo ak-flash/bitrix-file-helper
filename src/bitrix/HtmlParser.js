@@ -50,11 +50,7 @@ export class HtmlParser {
                             !name.toLowerCase().includes('name') &&
                             !name.includes('---') &&
                             !name.includes('Элемент') &&
-                            !name.toLowerCase().startsWith('добавить') &&
-                            !name.toLowerCase().includes('добавить элемент') &&
-                            !name.toLowerCase().includes('добавить папку') &&
-                            !name.toLowerCase().includes('добавить раздел') &&
-                            !name.toLowerCase().includes('добавить файл')) {
+                            !name.toLowerCase().includes('добавить')) {
                             files.push({
                                 name: name.substring(0, 100),
                                 size,
@@ -77,7 +73,14 @@ export class HtmlParser {
                 const href = $elem.attr('href');
 
                 if (text && text.length > 2 && text.length < 200) {
-                    files.push({ name: text, link: href });
+                    const textLower = text.toLowerCase();
+                    if (!textLower.includes('добавить') &&
+                        !textLower.includes('название') &&
+                        !textLower.includes('name') &&
+                        !text.includes('Элемент') &&
+                        !text.includes('---')) {
+                        files.push({ name: text, link: href });
+                    }
                 }
             });
         }
@@ -131,11 +134,7 @@ export class HtmlParser {
             const nameLower = name.toLowerCase();
             if (nameLower.includes('название') ||
                 nameLower.includes('name') ||
-                nameLower.startsWith('добавить') ||
-                nameLower.includes('добавить элемент') ||
-                nameLower.includes('добавить папку') ||
-                nameLower.includes('добавить файл') ||
-                nameLower.includes('добавить раздел') ||
+                nameLower.includes('добавить') ||
                 name.includes('Элемент')) return;
 
             const active = activeIdx >= 0 && cells[activeIdx]
@@ -187,6 +186,36 @@ export class HtmlParser {
         });
 
         return items;
+    }
+
+    /**
+     * Parse section/page name from Bitrix admin page HTML
+     * Extracts text from h1.adm-title element
+     * @param {string} html
+     * @returns {string|null}
+     */
+    static parseSectionName(html) {
+        try {
+            const $ = cheerio.load(html);
+
+            // First try to get the active folder name from the breadcrumbs
+            const navItems = $('.adm-navchain-item-text')
+                .map((i, el) => $(el).text().trim())
+                .get()
+                .filter(text => text !== '');
+
+            if (navItems.length > 0) {
+                return navItems[navItems.length - 1];
+            }
+
+            // Fallback to the top-level main title
+            const title = $('h1.adm-title, #adm-title').first().contents().filter(function () {
+                return this.type === 'text';
+            }).text().trim();
+            return title || null;
+        } catch (e) {
+            return null;
+        }
     }
 
     /**
