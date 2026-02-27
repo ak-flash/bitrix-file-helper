@@ -221,8 +221,9 @@
         <div class="mt-3 space-y-1.5">
           <div class="flex items-center justify-between text-xs text-gray-500 px-1">
             <span x-text="'Выбрано файлов: ' + uploadFiles.length"></span>
-            <button type="button" @click="uploadFiles = []" class="text-red-500 hover:text-red-700 hover:underline"
-              :disabled="isUploading">Очистить все</button>
+            <button type="button"
+              @click="uploadFiles = []; uploadStatus = ''; uploadStatusType = ''; uploadProgressText = ''"
+              class="text-red-500 hover:text-red-700 hover:underline" :disabled="isUploading">Очистить все</button>
           </div>
           <template x-for="(uf, idx) in uploadFiles" :key="uf._uid">
             <div class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors duration-150" :class="{

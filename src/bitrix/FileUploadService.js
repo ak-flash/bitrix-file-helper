@@ -249,7 +249,7 @@ export class FileUploadService {
             { name: 'bxu_files[]', filename: '', contentType: 'application/octet-stream', data: Buffer.alloc(0) }
         ];
 
-        console.log(`Sending file: NAME="${nameWithoutExt}", PROP[74][n0][name]="${nameBase}"`);
+        console.log(`[${new Date().toLocaleString('ru-RU')}] Sending file: NAME="${nameWithoutExt}", file="${nameBase}", sectionId=${effectiveSectionId}, date=${prop68Value || '(не указана)'}`);
 
         const boundary = `----WebKitFormBoundary${Date.now().toString(16)}`;
         const body = buildMultipartBody(fields, files, boundary, 'utf-8');
