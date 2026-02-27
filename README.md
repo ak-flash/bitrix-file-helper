@@ -57,6 +57,31 @@ node src/server.js
 PORT=8080 node src/server.js
 ```
 
+## Развёртывание (Production)
+
+При использовании **Supervisor** для фонового запуска приложения, **не используйте `npm start`**. Это приводит к тому, что при рестарте создаются зависшие процессы Node.js, которые продолжают занимать порт.
+
+Вместо этого используйте **прямой вызов `node`**.
+
+Пример конфигурационного файла (обычно `/etc/supervisor/conf.d/bitrix-helper.conf`):
+
+```ini
+[program:bitrix-helper]
+; Укажите абсолютные пути к node и вашему скрипту
+command=/usr/bin/node /абсолютный/путь/к/вашему/проекту/src/server.js
+directory=/абсолютный/путь/к/вашему/проекту/
+autostart=true
+autorestart=true
+user=www-data ; Имя пользователя сервера
+```
+
+После изменения конфигурации обновите Supervisor:
+```bash
+supervisorctl reread
+supervisorctl update
+supervisorctl restart bitrix-helper
+```
+
 ## REST API
 
 Все защищённые эндпоинты требуют заголовок:

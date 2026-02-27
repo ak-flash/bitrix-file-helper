@@ -212,3 +212,32 @@ server.on('error', (err) => {
     }
 });
 
+// Graceful shutdown logic
+const shutdown = (signal) => {
+    console.log(`\nReceived ${signal}. Shutting down gracefully...`);
+
+    // Force shutdown after 10 seconds if connections are still alive
+    const forceExitTimer = setTimeout(() => {
+        console.error('Forcefully shutting down because graceful close took too long');
+        process.exit(1);
+    }, 10000);
+
+    // Stops the server from accepting new connections
+    server.close(() => {
+        console.log('HTTP server closed');
+        clearTimeout(forceExitTimer);
+        process.exit(0);
+    });
+
+    // Close all keep-alive / active connections immediately to unblock the exit.
+    // Required to prevent the event loop from hanging on existing connections.
+    if (server.closeAllConnections) {
+        server.closeAllConnections();
+    }
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGQUIT', () => shutdown('SIGQUIT'));
+
+
