@@ -247,19 +247,32 @@ export class FileUploadService {
         const bufferData = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || '');
         const mimetype = extra?.mimetype || 'application/octet-stream';
 
-        fields.push({ name: prop74NameField, value: nameBase });
-        fields.push({ name: prop74TypeField, value: mimetype });
-        fields.push({ name: prop74SizeField, value: String(bufferData.length) });
-        fields.push({ name: prop74ErrorField, value: '0' });
-        fields.push({ name: 'save', value: 'Сохранить' });
-        fields.push({ name: 'WF', value: 'N' });
-        fields.push({ name: 'linked_state', value: 'Y' });
-        fields.push({ name: 'Update', value: 'Y' });
-        fields.push({ name: 'TMP_ID', value: '0' });
-        fields.push({ name: 'from', value: 'iblock_list_admin' });
-        fields.push({ name: 'find_section_section', value: effectiveSectionId });
-        fields.push({ name: 'DETAIL_TEXT_TYPE', value: 'html' });
-        fields.push({ name: 'PREVIEW_TEXT_TYPE', value: 'text' });
+        // Filter out conflicting fields that we want to specify dynamically per file
+        let finalFields = fields.filter(f => f.name !== 'NAME' && f.name !== 'CODE' && f.name !== 'ACTIVE');
+
+        const transliterated = transliterate(nameWithoutExt);
+        const slug = (transliterated || 'file')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+
+        finalFields.push({ name: 'CODE', value: slug.slice(0, 50) });
+        finalFields.push({ name: 'ACTIVE', value: 'Y' });
+        finalFields.push({ name: 'NAME', value: nameWithoutExt });
+
+        finalFields.push({ name: prop74NameField, value: nameBase });
+        finalFields.push({ name: prop74TypeField, value: mimetype });
+        finalFields.push({ name: prop74SizeField, value: String(bufferData.length) });
+        finalFields.push({ name: prop74ErrorField, value: '0' });
+        finalFields.push({ name: 'save', value: 'Сохранить' });
+        finalFields.push({ name: 'WF', value: 'N' });
+        finalFields.push({ name: 'linked_state', value: 'Y' });
+        finalFields.push({ name: 'Update', value: 'Y' });
+        finalFields.push({ name: 'TMP_ID', value: '0' });
+        finalFields.push({ name: 'from', value: 'iblock_list_admin' });
+        finalFields.push({ name: 'find_section_section', value: effectiveSectionId });
+        finalFields.push({ name: 'DETAIL_TEXT_TYPE', value: 'html' });
+        finalFields.push({ name: 'PREVIEW_TEXT_TYPE', value: 'text' });
 
         const files = [
             { name: 'PROP[74][n0]', filename: nameBase, contentType: mimetype, data: bufferData },
@@ -270,7 +283,7 @@ export class FileUploadService {
         console.log(`[${new Date().toLocaleString('ru-RU')}] Sending file: "${nameBase}", sectionId=${effectiveSectionId}, date=${prop68Value || '(не указана)'}`);
 
         const boundary = `----WebKitFormBoundary${Date.now().toString(16)}`;
-        const body = buildMultipartBody(fields, files, boundary, 'utf-8');
+        const body = buildMultipartBody(finalFields, files, boundary, 'utf-8');
 
         const response = await this.http.post(actionUrl, body, {
             headers: {
