@@ -5,11 +5,22 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { BitrixClient } from './BitrixClient.js';
 import config from '../config.json' with { type: 'json' };
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 
 const app = express();
 const port = process.env.PORT || 3000;
 
+app.use(helmet({
+    contentSecurityPolicy: false // Allowed because we use CDNs and Alpine inline scripts
+}));
 app.use(express.json());
+
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20, // Limit each IP to 20 login requests per window
+    message: { error: 'Слишком много попыток входа, пожалуйста, попробуйте позже' }
+});
 
 // Middleware для правильной обработки UTF-8 в заголовках
 app.use((req, res, next) => {
@@ -53,6 +64,9 @@ function decodeFileName(fileName) {
 
 const upload = multer({
     storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 50 * 1024 * 1024 // 50 MB
+    },
     fileFilter: (req, file, cb) => {
         // Декодируем имя файла
         file.originalname = decodeFileName(file.originalname);
@@ -79,7 +93,8 @@ const publicDir = path.join(__dirname, '..', 'public');
 app.use(express.static(publicDir));
 
 function createClient(ignoreSSL) {
-    const effectiveIgnore = ignoreSSL !== false;
+    // If frontend explicitly passed a boolean, use it. Otherwise, fallback to config.ignoreSSL. Secure by default.
+    const effectiveIgnore = typeof ignoreSSL === 'boolean' ? ignoreSSL : (config.ignoreSSL === true);
     return new BitrixClient(config.siteUrl, {
         adminPath: config.adminPath,
         maxRetries: config.maxRetries,
@@ -118,7 +133,7 @@ app.get('/config/public', (req, res) => {
     });
 });
 
-app.post('/auth/login', async (req, res) => {
+app.post('/auth/login', loginLimiter, async (req, res) => {
     const { username, password, ignoreSSL } = req.body || {};
     if (!username || !password) {
         res.status(400).json({ error: 'username and password are required' });
