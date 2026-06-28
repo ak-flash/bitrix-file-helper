@@ -93,6 +93,10 @@
           class="inline-flex items-center px-3 py-2 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed">
           Дерево файлов
         </button>
+        <button type="button" @click="openUploadLogsModal" :disabled="!isAuthorized"
+          class="inline-flex items-center px-3 py-2 text-sm font-medium rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed">
+          Логи загрузок
+        </button>
       </div>
 
       <div class="py-2 text-sm text-gray-600" x-show="breadcrumbs.length > 0">
@@ -393,6 +397,84 @@
         </div>
       </div>
     </template>
+
+    <!-- Модальное окно логов загрузок -->
+    <template x-if="isUploadLogsModalOpen">
+      <div class="fixed inset-0 bg-black/40 flex items-start justify-center p-4 sm:p-12 z-50"
+        @keydown.escape.window="closeUploadLogsModal">
+        <div class="bg-white rounded-lg max-w-4xl w-full max-h-[80vh] flex flex-col shadow-xl"
+          @click.outside="closeUploadLogsModal">
+          <div class="flex items-center justify-between px-4 py-2 border-b border-gray-200">
+            <h3 class="text-sm font-semibold">Логи загрузок</h3>
+            <div class="flex items-center gap-2">
+              <button type="button" @click="downloadUploadLogs" x-show="uploadLogs.length > 0"
+                class="inline-flex items-center gap-1 px-4 py-2 text-sm font-medium rounded bg-green-100 text-green-700 hover:bg-green-200">
+                📥 Скачать логи (CSV)
+              </button>
+              <button type="button" @click="clearUploadLogs" x-show="uploadLogs.length > 0"
+                class="inline-flex items-center gap-1 px-4 py-2 text-sm font-medium rounded bg-red-100 text-red-700 hover:bg-red-200">
+                🗑️ Очистить логи
+              </button>
+              <button type="button" @click="refreshUploadLogs"
+                class="inline-flex items-center gap-1 px-4 py-2 text-sm font-medium rounded bg-blue-100 text-blue-700 hover:bg-blue-200">
+                🔄 Обновить
+              </button>
+              <button type="button" @click="closeUploadLogsModal"
+                class="inline-flex items-center px-4 py-2 text-sm font-medium rounded bg-gray-200 text-gray-800 hover:bg-gray-300">
+                Закрыть
+              </button>
+            </div>
+          </div>
+          <div class="px-4 pb-2 overflow-auto relative">
+            <div class="sticky top-0 bg-white z-10 pt-2 pb-2 mb-2 border-b border-gray-100 shadow-sm">
+              <div class="mt-1 text-xs min-h-[18px]"
+                :class="uploadLogsStatusType === 'error' ? 'text-red-700' : (uploadLogsStatusType === 'ok' ? 'text-green-700' : '')"
+                x-text="uploadLogsStatus"></div>
+              <template x-if="isLoadingUploadLogs">
+                <div class="mt-2 text-xs">Загружаю логи...</div>
+              </template>
+            </div>
+            <template x-if="uploadLogs.length === 0 && !isLoadingUploadLogs">
+              <div class="mt-4 text-sm text-gray-500">Логов загрузок нет</div>
+            </template>
+            <template x-if="uploadLogs.length > 0">
+              <table class="w-full border-collapse text-xs mt-2">
+                <thead>
+                  <tr>
+                    <th class="border border-gray-200 bg-gray-100 px-2 py-1 text-left">Время</th>
+                    <th class="border border-gray-200 bg-gray-100 px-2 py-1 text-left">Файл</th>
+                    <th class="border border-gray-200 bg-gray-100 px-2 py-1 text-left">Размер</th>
+                    <th class="border border-gray-200 bg-gray-100 px-2 py-1 text-left">Раздел ID</th>
+                    <th class="border border-gray-200 bg-gray-100 px-2 py-1 text-left">Статус</th>
+                    <th class="border border-gray-200 bg-gray-100 px-2 py-1 text-left">Ошибка</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="(log, index) in uploadLogs" :key="log.id || index">
+                    <tr class="hover:bg-gray-50/50">
+                      <td class="border border-gray-200 px-2 py-1 whitespace-nowrap"
+                        x-text="new Date(log.timestamp).toLocaleString('ru-RU')"></td>
+                      <td class="border border-gray-200 px-2 py-1 break-words max-w-[250px]" x-text="log.fileName"></td>
+                      <td class="border border-gray-200 px-2 py-1 whitespace-nowrap"
+                        x-text="formatFileSize(log.fileSize)"></td>
+                      <td class="border border-gray-200 px-2 py-1 whitespace-nowrap" x-text="log.sectionId || '-'"></td>
+                      <td class="border border-gray-200 px-2 py-1 whitespace-nowrap">
+                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px]" :class="log.status === 'success' ? 'bg-green-100 text-green-700' :
+                                  (log.status === 'error' ? 'bg-red-100 text-red-700' :
+                                  'bg-yellow-100 text-yellow-700')" x-text="log.status === 'success' ? '✅ Успешно' :
+                                  (log.status === 'error' ? '❌ Ошибка' : '⏳ В процессе')"></span>
+                      </td>
+                      <td class="border border-gray-200 px-2 py-1 break-words text-red-600" x-text="log.error || '-'">
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </template>
+          </div>
+        </div>
+      </div>
+    </template>
   </div>
 
   <script>
@@ -470,6 +552,12 @@
         _fileUidCounter: 0,
         completedTreeRequests: 0,
         treeRootSections: [],
+        // Логи загрузок
+        isUploadLogsModalOpen: false,
+        isLoadingUploadLogs: false,
+        uploadLogs: [],
+        uploadLogsStatus: '',
+        uploadLogsStatusType: '',
 
         get isAuthorized() {
           return !!this.token;
@@ -1406,6 +1494,101 @@
             this.treeProgress = 100;
           }
 
+        },
+
+        // Методы для логов загрузок
+        openUploadLogsModal() {
+          this.isUploadLogsModalOpen = true;
+          this.refreshUploadLogs();
+        },
+
+        closeUploadLogsModal() {
+          this.isUploadLogsModalOpen = false;
+        },
+
+        async refreshUploadLogs() {
+          this.uploadLogsStatus = '';
+          this.uploadLogsStatusType = '';
+          this.isLoadingUploadLogs = true;
+
+          try {
+            const res = await this.apiRequest('/files/upload-logs');
+            if (!res.ok) {
+              if (res.status === 401) {
+                this.setAuth(null);
+                saveSettings({
+                  token: undefined,
+                  tokenCreatedAt: undefined
+                });
+                this.authStatus = 'Сессия истекла, войди снова';
+                this.authStatusType = 'error';
+              }
+              this.uploadLogsStatus = 'Ошибка получения логов: ' + res.status;
+              this.uploadLogsStatusType = 'error';
+              return;
+            }
+
+            const data = await res.json().catch(() => ({}));
+            this.uploadLogs = Array.isArray(data.logs) ? data.logs : [];
+            this.uploadLogsStatus = this.uploadLogs.length > 0 ? `Найдено ${this.uploadLogs.length} записей` : 'Логов нет';
+            this.uploadLogsStatusType = 'ok';
+          } catch (e) {
+            this.uploadLogsStatus = 'Ошибка сети: ' + e.message;
+            this.uploadLogsStatusType = 'error';
+          } finally {
+            this.isLoadingUploadLogs = false;
+          }
+        },
+
+        async clearUploadLogs() {
+          if (!confirm('Очистить все логи загрузок?')) return;
+
+          try {
+            const res = await this.apiRequest('/files/upload-logs', {
+              method: 'DELETE'
+            });
+            if (res.ok) {
+              this.uploadLogs = [];
+              this.uploadLogsStatus = 'Логи очищены';
+              this.uploadLogsStatusType = 'ok';
+            } else {
+              this.uploadLogsStatus = 'Ошибка очистки логов';
+              this.uploadLogsStatusType = 'error';
+            }
+          } catch (e) {
+            this.uploadLogsStatus = 'Ошибка сети: ' + e.message;
+            this.uploadLogsStatusType = 'error';
+          }
+        },
+
+        downloadUploadLogs() {
+          if (this.uploadLogs.length === 0) return;
+
+          // Создаем CSV
+          const headers = ['Время', 'Файл', 'Размер', 'Раздел ID', 'Статус', 'Ошибка'];
+          const csvContent = [
+            headers.join(','),
+            ...this.uploadLogs.map(log => [
+              new Date(log.timestamp).toLocaleString('ru-RU'),
+              `"${log.fileName.replace(/"/g, '""')}"`,
+              this.formatFileSize(log.fileSize),
+              log.sectionId || '-',
+              log.status === 'success' ? 'Успешно' : (log.status === 'error' ? 'Ошибка' : 'В процессе'),
+              `"${(log.error || '-').replace(/"/g, '""')}"`
+            ].join(','))
+          ].join('\n');
+
+          // Создаем и скачиваем файл
+          const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement('a');
+          const url = URL.createObjectURL(blob);
+          link.setAttribute('href', url);
+          link.setAttribute('download', `bitrix-upload-logs-${new Date().toISOString().slice(0, 10)}.csv`);
+          link.style.visibility = 'hidden';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
         }
       };
     }

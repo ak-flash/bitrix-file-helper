@@ -74,6 +74,7 @@ const upload = multer({
     }
 });
 const sessions = new Map();
+const uploadLogs = []; // Массив для хранения логов загруженных файлов
 
 // Периодическая очистка старых сессий (неактивных более 24 часов)
 const SESSION_TTL = 24 * 60 * 60 * 1000; // 24 hours
@@ -200,13 +201,44 @@ app.post('/files/upload', authMiddleware, upload.single('file'), async (req, res
         uploadDate: body.uploadDate || null,
         mimetype: req.file.mimetype
     };
+
+    // Создаем запись в логе
+    const logEntry = {
+        id: Date.now(),
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+        sectionId: sectionId,
+        uploadDate: body.uploadDate || null,
+        timestamp: new Date().toISOString(),
+        status: 'pending',
+        error: null
+    };
+    uploadLogs.unshift(logEntry); // Добавляем в начало
+
     try {
         const result = await req.bitrix.uploadFile(sectionId, req.file.originalname, req.file.buffer, extra);
+        // Обновляем статус лога
+        logEntry.status = 'success';
         res.json(result);
     } catch (error) {
         console.error('Upload error:', error);
+        // Обновляем статус лога с ошибкой
+        logEntry.status = 'error';
+        logEntry.error = error.message || 'Upload error';
         res.status(500).json({ error: error.message || 'Upload error' });
     }
+});
+
+// Endpoint для получения логов загруженных файлов
+app.get('/files/upload-logs', authMiddleware, (req, res) => {
+    res.json({ logs: uploadLogs });
+});
+
+// Endpoint для очистки логов
+app.delete('/files/upload-logs', authMiddleware, (req, res) => {
+    uploadLogs.length = 0;
+    res.json({ success: true });
 });
 
 app.get('/health', (req, res) => {
