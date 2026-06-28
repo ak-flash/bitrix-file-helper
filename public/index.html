@@ -434,9 +434,6 @@
                 <div class="mt-2 text-xs">Загружаю логи...</div>
               </template>
             </div>
-            <template x-if="uploadLogs.length === 0 && !isLoadingUploadLogs">
-              <div class="mt-4 text-sm text-gray-500">Логов загрузок нет</div>
-            </template>
             <template x-if="uploadLogs.length > 0">
               <table class="w-full border-collapse text-xs mt-2">
                 <thead>
@@ -459,9 +456,11 @@
                         x-text="formatFileSize(log.fileSize)"></td>
                       <td class="border border-gray-200 px-2 py-1 whitespace-nowrap" x-text="log.sectionId || '-'"></td>
                       <td class="border border-gray-200 px-2 py-1 whitespace-nowrap">
-                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px]" :class="log.status === 'success' ? 'bg-green-100 text-green-700' :
+                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px]"
+                          :class="log.status === 'success' ? 'bg-green-100 text-green-700' :
                                   (log.status === 'error' ? 'bg-red-100 text-red-700' :
-                                  'bg-yellow-100 text-yellow-700')" x-text="log.status === 'success' ? '✅ Успешно' :
+                                  'bg-yellow-100 text-yellow-700')"
+                          x-text="log.status === 'success' ? '✅ Успешно' :
                                   (log.status === 'error' ? '❌ Ошибка' : '⏳ В процессе')"></span>
                       </td>
                       <td class="border border-gray-200 px-2 py-1 break-words text-red-600" x-text="log.error || '-'">
@@ -510,6 +509,13 @@
 
     function bitrixHelperApp() {
       return {
+        // Логи загрузок - в начале для правильной реактивности
+        isUploadLogsModalOpen: false,
+        isLoadingUploadLogs: false,
+        uploadLogs: [],
+        uploadLogsStatus: '',
+        uploadLogsStatusType: '',
+
         token: null,
         siteUrl: '',
         iblockId: 6,
@@ -552,12 +558,6 @@
         _fileUidCounter: 0,
         completedTreeRequests: 0,
         treeRootSections: [],
-        // Логи загрузок
-        isUploadLogsModalOpen: false,
-        isLoadingUploadLogs: false,
-        uploadLogs: [],
-        uploadLogsStatus: '',
-        uploadLogsStatusType: '',
 
         get isAuthorized() {
           return !!this.token;
@@ -1499,10 +1499,26 @@
         // Методы для логов загрузок
         openUploadLogsModal() {
           this.isUploadLogsModalOpen = true;
-          this.refreshUploadLogs();
+          this.justOpenedModal = true;
+
+          requestAnimationFrame(() => {
+            this.refreshUploadLogs().catch(error => {
+              this.uploadLogsStatus = 'Ошибка при получении логов: ' + error.message;
+              this.uploadLogsStatusType = 'error';
+              this.isLoadingUploadLogs = false;
+            });
+
+            // Сбрасываем флаг через короткое время
+            setTimeout(() => {
+              this.justOpenedModal = false;
+            }, 100);
+          });
         },
 
         closeUploadLogsModal() {
+          if (this.justOpenedModal) {
+            return;
+          }
           this.isUploadLogsModalOpen = false;
         },
 
