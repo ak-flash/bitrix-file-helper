@@ -48,6 +48,8 @@ npm install
 npm start
 # или напрямую:
 node src/server.js
+# для dev разработки
+npm run dev
 ```
 
 По умолчанию сервер стартует на порту **3000**.  
